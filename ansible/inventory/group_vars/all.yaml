@@ -1,0 +1,36 @@
+---
+# Global variables for all hosts
+ansible_python_interpreter: /usr/bin/python3
+
+# Docker configuration
+# docker_compose_version: "2.21.0"
+# docker_version: "24.0.*"
+
+# Airflow configuration
+# airflow_project_dir: /opt/airflow
+# airflow_uid: 50000
+# airflow_gid: 0
+
+# Environment variables for Airflow
+# airflow_env_vars:
+#   AIRFLOW_IMAGE_NAME: "apache/airflow:3.1.0"
+#   AIRFLOW_FERNET_KEY: "{{ lookup('env', 'AIRFLOW_FERNET_KEY') | default('') }}"
+#   POSTGRES_USER: "{{ lookup('env', 'POSTGRES_USER') | default('airflow') }}"
+#   POSTGRES_PASSWORD: "{{ lookup('env', 'POSTGRES_PASSWORD') | default('airflow') }}"
+#   POSTGRES_DB: "{{ postgres_db | default('airflow') }}"
+#   AIRFLOW_ADMIN_USERNAME: "{{ lookup('env', 'AIRFLOW_ADMIN_USERNAME') | default('airflow') }}"
+#   AIRFLOW_ADMIN_PASSWORD: "{{ lookup('env', 'AIRFLOW_ADMIN_PASSWORD') | default('airflow') }}"
+
+# Docker Compose service configuration
+compose_file_path: "{{ airflow_project_dir }}/docker-compose.yaml"
+
+# Required packages for Ubuntu 24.04 LTS
+required_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - python3-pip
+  - python3-setuptools
+  - python3-venv

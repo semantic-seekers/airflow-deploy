@@ -1,0 +1,24 @@
+all:
+  children:
+    airflow:
+      hosts:
+        airflow-server:
+          ansible_host: "{{ lookup('env', 'AIRFLOW_SERVER_1') | default('failed_to_provide_target_host') }}"
+      vars:
+        # Deploy vars
+        ansible_user: "{{ lookup('env', 'ANSIBLE_USER') | default('failed_to_provide_ansible_user') }}"
+        # ansible_ssh_private_key_file: "{{ lookup('env', 'SSH_PRIVATE_KEY_FILE') | default('~/.ssh/ansible_key') }}"
+        #
+        deploy_airflow_health_check: "{{ lookup('env', 'DEPLOY_AIRFLOW_HEALTH_CHECK') | default(false) }}"
+        # Airflow vars
+        airflow_project_dir: /opt/airflow
+        airflow_uid: 50000
+        airflow_uid_user: airflow
+        airflow_gid: 50000
+        airflow_gid_group: airflow
+        # Airflow configuration from environment
+        airflow_fernet_key: "{{ lookup('env', 'AIRFLOW_FERNET_KEY') }}"
+        postgres_user: "{{ lookup('env', 'POSTGRES_USER') }}"
+        postgres_password: "{{ lookup('env', 'POSTGRES_PASSWORD') }}"
+        airflow_admin_username: "{{ lookup('env', 'AIRFLOW_ADMIN_USERNAME') }}"
+        airflow_admin_password: "{{ lookup('env', 'AIRFLOW_ADMIN_PASSWORD') }}"

@@ -1,0 +1,173 @@
+---
+
+- name: Deploy Airflow
+  hosts: airflow
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      
+    - name: Install required packages
+      apt:
+        name: "{{ required_packages }}"
+        state: present
+
+    - name: Copy sysctl configuration to /etc/sysctl.d/
+      copy:
+        src: ../files/local.conf
+        dest: /etc/sysctl.d/local.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Apply sysctl settings
+      command: sysctl --system
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+        
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        
+    - name: Install Docker and Docker Compose
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+        
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+        
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Reset SSH connection to activate docker group
+      meta: reset_connection
+
+    - name: Create airflow OS group
+      ansible.builtin.group:
+        name: "{{ airflow_gid_group }}"
+        gid: "{{ airflow_gid }}"
+        state: present
+
+    - name: Create user airflow OS user
+      ansible.builtin.user:
+        name: "{{ airflow_uid_user }}"
+        comment: Airflow user
+        uid: "{{ airflow_uid }}"
+        group: "{{ airflow_gid_group }}"
+        state: present
+        
+    - name: Create PostgreSQL data directory
+      file:
+        path: /opt/postgresql/data
+        state: directory
+        owner: 999
+        group: 999
+        mode: '0755'
+        
+    - name: Create Airflow project directory
+      file:
+        path: "{{ airflow_project_dir }}"
+        state: directory
+        owner: "{{ airflow_uid }}"
+        group: "{{ airflow_gid }}"
+        mode: '0755'
+        
+    - name: Create Airflow subdirectories
+      file:
+        path: "{{ airflow_project_dir }}/{{ item }}"
+        state: directory
+        owner: "{{ airflow_uid }}"
+        group: "{{ airflow_gid }}"
+        mode: '0755'
+      loop:
+        - dags
+        - logs
+        - plugins
+        - config
+        
+    - name: Copy docker-compose.yaml to remote host
+      copy:
+        src: ../files/docker-compose.yaml
+        dest: "{{ compose_file_path }}"
+        owner: "{{ airflow_uid }}"
+        group: "{{ airflow_gid }}"
+        mode: '0644'
+        
+    - name: Create .env file for Docker Compose
+      template:
+        src: ../templates/airflow.env.j2
+        dest: "{{ airflow_project_dir }}/.env"
+        owner: "{{ airflow_uid }}"
+        group: "{{ airflow_gid }}"
+        mode: '0644'
+        
+    - name: Pull Docker images
+      shell: |
+        cd {{ airflow_project_dir }}
+        docker compose pull
+      become_user: "{{ ansible_user }}"
+
+    - name: Reset SSH connection before database initialization
+      meta: reset_connection
+
+    - name: Initialize Airflow database
+      shell: |
+        cd {{ airflow_project_dir }}
+        docker compose up airflow-init
+      become_user: "{{ ansible_user }}"
+      retries: 2
+      delay: 10
+      register: init_result
+      until: init_result.rc == 0
+      async: 600
+      poll: 10
+      
+    - name: Start Airflow services
+      shell: |
+        cd {{ airflow_project_dir }}
+        docker compose up -d
+      become_user: "{{ ansible_user }}"
+      retries: 2
+      delay: 10
+      register: start_result
+      until: start_result.rc == 0
+      
+    - name: Wait for Airflow webserver to be ready
+      uri:
+        url: "http://localhost:8080/health"
+        method: GET
+        status_code: 200
+      register: airflow_health
+      until: airflow_health.status == 200
+      retries: 30
+      delay: 10
+      when: deploy_airflow_health_check is defined and deploy_airflow_health_check | bool
+      
+    - name: Display deployment status
+      debug:
+        msg: |
+          Done.
+          Access URLs:
+          - Airflow Web UI: http://{{ ansible_host }}:8080
+          - Admin login: {{ airflow_admin_username | default('airflow') }}
