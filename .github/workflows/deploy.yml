@@ -1,0 +1,91 @@
+name: Airflow Deploy
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    branches: [ development ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "The environment to deploy to"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  ANSIBLE_HOST_KEY_CHECKING: False
+
+jobs:
+  deploy:
+    # runs-on: ubuntu-latest, ubuntu-22.04   - Runner syntax
+    runs-on: ubuntu-24.04
+    if: github.event.head_commit.message != '' && startsWith(github.event.head_commit.message, 'Merge pull request')
+    # Determine environment based on branch
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/development' && 'dev') }}
+    
+    steps:
+    # Checkout repository
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    # Setup Python environment
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    # Install Ansible
+    - name: Install Ansible
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible
+        ansible --version
+        
+    # Setup SSH key from secrets
+    - name: Create SSH key file
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY_ANSIBLE }}" > ~/.ssh/ansible_key
+        chmod 600 ~/.ssh/ansible_key
+        
+    # Set environment variables for static inventory
+    - name: Set environment variables
+      run: |
+        echo "ANSIBLE_USER=${{ vars.ANSIBLE_USER }}" >> $GITHUB_ENV
+        echo "SSH_PRIVATE_KEY_FILE=~/.ssh/ansible_key" >> $GITHUB_ENV
+        #
+        echo "AIRFLOW_FERNET_KEY=${{ secrets.AIRFLOW_FERNET_KEY }}" >> $GITHUB_ENV
+        echo "POSTGRES_USER=${{ vars.POSTGRES_USER }}" >> $GITHUB_ENV
+        echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> $GITHUB_ENV
+        echo "AIRFLOW_ADMIN_USERNAME=${{ vars.AIRFLOW_ADMIN_USERNAME }}" >> $GITHUB_ENV
+        echo "AIRFLOW_ADMIN_PASSWORD=${{ secrets.AIRFLOW_ADMIN_PASSWORD }}" >> $GITHUB_ENV
+        #
+        echo "AIRFLOW_SERVER_1=${{ secrets.AIRFLOW_SERVER_1 }}" >> $GITHUB_ENV
+        
+    # Validate Ansible configuration
+    - name: Validate Ansible playbook syntax
+      run: |
+        cd ansible
+        ansible-playbook --syntax-check playbooks/deploy-airflow.yaml
+        
+    # Dry run for pull requests
+    # - name: Run Ansible playbook (dry-run)
+    #   if: github.event_name == 'pull_request'
+    #   run: |
+    #     cd ansible
+    #     ansible-playbook \
+    #       playbooks/deploy-airflow.yaml \
+    #       --check \
+    #       --diff
+          
+    # Deploy to remote host
+    - name: Deploy Airflow to remote host
+      if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/development')
+      run: |
+        cd ansible
+        ansible-playbook \
+          playbooks/deploy-airflow.yaml ${{ vars.ANSIBLE_PLAYBOOK_OPTIONS }}
