@@ -15,15 +15,15 @@
     #    - /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
     #  ignore_errors: yes
 
-    - name: Update apt package cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-      
-    - name: Install required packages
-      apt:
-        name: "{{ required_packages }}"
-        state: present
+    #- name: Update apt package cache
+    #  apt:
+    #    update_cache: yes
+    #    cache_valid_time: 3600
+    #  
+    #- name: Install required packages
+    #  apt:
+    #    name: "{{ required_packages }}"
+    #    state: present
 
     - name: Copy sysctl configuration to /etc/sysctl.d/
       copy:
