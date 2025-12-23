@@ -120,5 +120,6 @@ venv.bak/
 **/*.drawio.bkp
 **/*.drawio.dtmp
 
-
-tmp/
+.claude-flow
+.swarm
+tmp
